@@ -224,10 +224,4 @@ Agents use multiple methods to find the central server:
 - **Permissions**: Some drives require elevated permissions to access
 - **External Drives**: USB drives are supported but may disconnect
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
 **For installation instructions, see [INSTALLATION.md](INSTALLATION.md)**
