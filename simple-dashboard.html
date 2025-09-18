@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Monitor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(26, 31, 46, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #2d3748;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #64b5f6;
+        }
+
+        .container {
+            display: flex;
+            min-height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            width: 300px;
+            background: rgba(37, 42, 58, 0.6);
+            border-right: 1px solid #2d3748;
+            padding: 1.5rem;
+        }
+
+        .sidebar h2 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: #a0aec0;
+        }
+
+        .agent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .agent-item {
+            padding: 0.75rem;
+            background: rgba(45, 55, 72, 0.5);
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .agent-item:hover {
+            background: rgba(45, 55, 72, 0.8);
+            border-color: #64b5f6;
+        }
+
+        .agent-item.active {
+            background: rgba(100, 181, 246, 0.1);
+            border-color: #64b5f6;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: rgba(37, 42, 58, 0.6);
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .metric-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .metric-icon {
+            width: 24px;
+            height: 24px;
+            color: #64b5f6;
+        }
+
+        .metric-title {
+            font-size: 0.9rem;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(45, 55, 72, 0.5);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.warning {
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+        }
+
+        .progress-fill.danger {
+            background: linear-gradient(90deg, #ef4444, #dc2626);
+        }
+
+        .system-info {
+            background: rgba(37, 42, 58, 0.6);
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .system-info h3 {
+            color: #64b5f6;
+            margin-bottom: 1rem;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(45, 55, 72, 0.5);
+        }
+
+        .info-label {
+            color: #a0aec0;
+        }
+
+        .info-value {
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: #a0aec0;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .refresh-btn {
+            background: #64b5f6;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .refresh-btn:hover {
+            background: #42a5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🖥️ Server Monitor Dashboard</h1>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <h2>Connected Agents</h2>
+            <button class="refresh-btn" onclick="loadAgents()">🔄 Refresh</button>
+            <div id="agent-list" class="agent-list">
+                <div class="loading">Loading agents...</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div id="dashboard-content">
+                <div class="loading">Select an agent to view metrics</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let agents = [];
+        let selectedAgent = null;
+        let refreshInterval = null;
+
+        // API Base URL
+        const API_BASE = 'http://localhost:8080';
+
+        async function loadAgents() {
+            try {
+                const response = await fetch(`${API_BASE}/agents`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                agents = await response.json();
+                renderAgentList();
+                
+                if (selectedAgent && !agents.find(a => a.id === selectedAgent)) {
+                    selectedAgent = null;
+                    document.getElementById('dashboard-content').innerHTML = 
+                        '<div class="loading">Selected agent disconnected</div>';
+                }
+            } catch (error) {
+                document.getElementById('agent-list').innerHTML = 
+                    `<div class="error">Failed to load agents: ${error.message}<br>Make sure the central server is running on port 8080</div>`;
+            }
+        }
+
+        function renderAgentList() {
+            const container = document.getElementById('agent-list');
+            
+            if (agents.length === 0) {
+                container.innerHTML = '<div class="loading">No agents connected</div>';
+                return;
+            }
+
+            container.innerHTML = agents.map(agent => `
+                <div class="agent-item ${selectedAgent === agent.id ? 'active' : ''}" 
+                     onclick="selectAgent('${agent.id}')">
+                    <div class="status-dot ${agent.status === 'online' ? '' : 'offline'}"></div>
+                    <div>
+                        <div style="font-weight: 500;">${agent.id}</div>
+                        <div style="font-size: 0.8rem; color: #a0aec0;">
+                            ${agent.status} • Last seen: ${new Date(agent.last_seen).toLocaleTimeString()}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function selectAgent(agentId) {
+            selectedAgent = agentId;
+            renderAgentList();
+            await loadAgentData(agentId);
+            
+            // Start auto-refresh for selected agent
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(() => loadAgentData(agentId), 5000);
+        }
+
+        async function loadAgentData(agentId) {
+            try {
+                const agent = agents.find(a => a.id === agentId);
+                if (!agent || agent.status !== 'online') {
+                    document.getElementById('dashboard-content').innerHTML = 
+                        '<div class="error">Agent is offline or disconnected</div>';
+                    return;
+                }
+
+                // Get system info, status, and drives
+                const [infoResponse, statusResponse, drivesResponse] = await Promise.all([
+                    fetch(`${agent.url}/api/system-info`),
+                    fetch(`${agent.url}/api/status`),
+                    fetch(`${agent.url}/api/drives`)
+                ]);
+
+                if (!infoResponse.ok || !statusResponse.ok) {
+                    throw new Error('Failed to fetch agent data');
+                }
+
+                const info = await infoResponse.json();
+                const status = await statusResponse.json();
+                const drives = drivesResponse.ok ? await drivesResponse.json() : { drives: [] };
+
+                renderDashboard(info, status, drives);
+            } catch (error) {
+                document.getElementById('dashboard-content').innerHTML = 
+                    `<div class="error">Failed to load agent data: ${error.message}</div>`;
+            }
+        }
+
+        function renderDashboard(info, status, drives) {
+            const cpuPercent = Math.round(status.cpu_percent);
+            const memoryPercent = Math.round(status.memory_percent);
+            const diskPercent = Math.round(status.disk_percent);
+
+            function getProgressClass(percent) {
+                if (percent > 80) return 'danger';
+                if (percent > 60) return 'warning';
+                return '';
+            }
+
+            function getHealthIcon(healthStatus) {
+                switch (healthStatus.toLowerCase()) {
+                    case 'ok':
+                    case 'good':
+                        return '✅';
+                    case 'warning':
+                        return '⚠️';
+                    case 'error':
+                    case 'critical':
+                        return '❌';
+                    default:
+                        return '❓';
+                }
+            }
+
+            function getHealthColor(healthStatus) {
+                switch (healthStatus.toLowerCase()) {
+                    case 'ok':
+                    case 'good':
+                        return '#4ade80';
+                    case 'warning':
+                        return '#fbbf24';
+                    case 'error':
+                    case 'critical':
+                        return '#ef4444';
+                    default:
+                        return '#a0aec0';
+                }
+            }
+
+            // Generate drives section
+            let drivesHtml = '';
+            if (drives && drives.drives && drives.drives.length > 0) {
+                drivesHtml = `
+                    <div class="system-info">
+                        <h3>Drive Information (${drives.drives.length} drives)</h3>
+                        <div style="display: grid; gap: 1rem;">
+                            ${drives.drives.map(drive => `
+                                <div class="metric-card" style="margin: 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <div style="font-size: 1.5rem;">💿</div>
+                                            <div>
+                                                <div style="font-weight: 600; color: #ffffff;">${drive.device}</div>
+                                                <div style="font-size: 0.8rem; color: #a0aec0;">${drive.mountpoint} (${drive.fstype})</div>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span style="font-size: 1.2rem;">${getHealthIcon(drive.health_status)}</span>
+                                            <span style="color: ${getHealthColor(drive.health_status)}; font-weight: 500; font-size: 0.9rem;">
+                                                ${drive.health_status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 0.5rem;">
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.25rem;">
+                                            <span style="color: #a0aec0;">Used</span>
+                                            <span style="color: #ffffff;">${drive.used_gb.toFixed(1)} GB / ${drive.total_gb.toFixed(1)} GB</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill ${getProgressClass(drive.percent_used)}" 
+                                                 style="width: ${Math.min(drive.percent_used, 100)}%"></div>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 0.25rem;">
+                                            <span style="color: #a0aec0;">Free Space</span>
+                                            <span style="color: #ffffff;">${drive.free_gb.toFixed(1)} GB (${(100 - drive.percent_used).toFixed(1)}%)</span>
+                                        </div>
+                                        ${drive.smart_available ? `
+                                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 0.25rem;">
+                                                <span style="color: #a0aec0;">SMART Status</span>
+                                                <span style="color: #4ade80;">Available</span>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('dashboard-content').innerHTML = `
+                <div class="dashboard-grid">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon">🖥️</div>
+                            <div class="metric-title">CPU Usage</div>
+                        </div>
+                        <div class="metric-value">${cpuPercent}%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressClass(cpuPercent)}" 
+                                 style="width: ${cpuPercent}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon">💾</div>
+                            <div class="metric-title">Memory Usage</div>
+                        </div>
+                        <div class="metric-value">${memoryPercent}%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressClass(memoryPercent)}" 
+                                 style="width: ${memoryPercent}%"></div>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #a0aec0; margin-top: 0.5rem;">
+                            ${formatBytes(status.memory_used_mb * 1024 * 1024)} / ${formatBytes(status.memory_total_mb * 1024 * 1024)}
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon">💿</div>
+                            <div class="metric-title">Primary Disk</div>
+                        </div>
+                        <div class="metric-value">${diskPercent}%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressClass(diskPercent)}" 
+                                 style="width: ${diskPercent}%"></div>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #a0aec0; margin-top: 0.5rem;">
+                            ${status.disk_used_gb.toFixed(1)} GB / ${status.disk_total_gb.toFixed(1)} GB
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon">⏱️</div>
+                            <div class="metric-title">Uptime</div>
+                        </div>
+                        <div class="metric-value">${formatUptime(status.uptime_seconds)}</div>
+                    </div>
+                </div>
+
+                <div class="system-info">
+                    <h3>System Information</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Hostname:</span>
+                            <span class="info-value">${info.hostname}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Platform:</span>
+                            <span class="info-value">${info.platform}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Architecture:</span>
+                            <span class="info-value">${info.architecture}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">CPU Cores:</span>
+                            <span class="info-value">${info.cpu_cores}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Total Drives:</span>
+                            <span class="info-value">${drives && drives.drives ? drives.drives.length : 0}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Boot Time:</span>
+                            <span class="info-value">${new Date(info.boot_time * 1000).toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
+
+                ${drivesHtml}
+            `;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        }
+
+        // Initialize
+        loadAgents();
+        
+        // Auto-refresh agent list every 30 seconds
+        setInterval(loadAgents, 30000);
+    </script>
+</body>
+</html>
